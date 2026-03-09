@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .clip-path-whatsapp-tail {
+    clip-path: polygon(100% 0, 0 0, 100% 100%);
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "WhatCart",
+  "description": "SaaS for abandoned cart recovery via WhatsApp with dynamic message previews and automated recovery workflows.",
+  "requestFramePermissions": []
+}
