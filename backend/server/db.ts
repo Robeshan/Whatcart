@@ -1,7 +1,14 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config({ path: './backend/.env' });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Prefer backend/.env, then fallback to frontend/.env for split-folder setups.
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../frontend/.env') });
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

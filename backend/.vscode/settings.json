@@ -6,10 +6,9 @@
             "server": "localhost",
             "port": 5432,
             "driver": "PostgreSQL",
-            "name": "webchart",
+            "name": "webchat",
             "database": "webchat",
-            "username": "postgres",
-            "password": "Satalan1925$"
+            "username": "postgres"
         }
     ]
 }

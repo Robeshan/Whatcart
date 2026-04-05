@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx backend/server.ts",
-    "build": "vite build --config frontend/vite.config.ts",
-    "preview": "vite preview --config frontend/vite.config.ts",
-    "clean": "rm -rf frontend/dist",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rmdir /s /q dist",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,7 +1,13 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config({ path: './backend/.env' });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../frontend/.env') });
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
