@@ -3,6 +3,8 @@ import db from "../db.js";
 import { hashPassword, generateVerificationCode, getTokenExpiry, generateToken, comparePassword, generateResetToken, generateApiKey } from "../utils/auth.js";
 import { authRateLimiter, authMiddleware } from "../utils/middleware.js";
 
+import { sendVerificationEmail } from "../services/emailService.js";
+
 const router = Router();
 
 // Register
@@ -28,20 +30,20 @@ router.post("/register", authRateLimiter, async (req, res) => {
     const verificationCode = generateVerificationCode();
     const codeExpiry = getTokenExpiry(15); // 15 minutes
 
-    const insert = db.prepare(
-      "INSERT INTO users (email, password, phone, verification_code, verification_code_expiry, subscription_plan_id) VALUES (?, ?, ?, ?, ?, ?)"
+    const result = await db.query(
+      "INSERT INTO users (email, password, phone, verification_code, verification_code_expiry, subscription_plan_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+      [email, hashedPassword, phone, verificationCode, codeExpiry, 1]
     );
-    const result = insert.run(email, hashedPassword, phone, verificationCode, codeExpiry, 1); // 1 = Starter plan
 
-    // TODO: Send SMS with verification code (integrate Twilio or similar)
-    console.log(`[VERIFICATION] Code for ${phone}: ${verificationCode}`);
+    // Send verification email
+    await sendVerificationEmail(email, verificationCode);
 
     res.status(201).json({
-      id: result.lastInsertRowid,
-      message: "Registration successful. Please verify your phone.",
+      id: result.rows[0].id,
+      message: "Registration successful. Please verify your email.",
     });
   } catch (error: any) {
-    if (error.message.includes("UNIQUE constraint failed")) {
+    if (error.code === '23505' && error.constraint === 'users_email_key') {
       return res.status(400).json({ error: "Email already exists" });
     }
     console.error("Registration error:", error);
@@ -50,34 +52,36 @@ router.post("/register", authRateLimiter, async (req, res) => {
 });
 
 // Verify Email
-router.post("/verify", authRateLimiter, (req, res) => {
+router.post("/verify", authRateLimiter, async (req, res) => {
   const { email, code } = req.body;
 
   if (!email || !code) {
     return res.status(400).json({ error: "Email and code are required" });
   }
 
-  const user = db.prepare("SELECT * FROM users WHERE email = ? AND verification_code = ?").get(email, code) as any;
-  
-  if (!user) {
-    return res.status(400).json({ error: "Invalid verification code" });
-  }
-
-  // Check if code expired
-  const codeExpiry = new Date(user.verification_code_expiry);
-  if (codeExpiry < new Date()) {
-    return res.status(400).json({ error: "Verification code expired. Please request a new one." });
-  }
-
   try {
-    db.prepare("UPDATE users SET is_verified = 1, verification_code = NULL, verification_code_expiry = NULL WHERE id = ?").run(
+    const userResult = await db.query("SELECT * FROM users WHERE email = $1 AND verification_code = $2", [email, code]);
+    const user = userResult.rows[0];
+
+    if (!user) {
+      return res.status(400).json({ error: "Invalid verification code" });
+    }
+
+    // Check if code expired
+    const codeExpiry = new Date(user.verification_code_expiry);
+    if (codeExpiry < new Date()) {
+      return res.status(400).json({ error: "Verification code expired. Please request a new one." });
+    }
+
+    await db.query("UPDATE users SET is_verified = 1, verification_code = NULL, verification_code_expiry = NULL WHERE id = $1", [
       user.id
-    );
+    ]);
 
     const token = generateToken(user.id, user.email);
 
     // Get subscription plan details
-    const plan = db.prepare("SELECT * FROM packages WHERE id = ?").get(user.subscription_plan_id) as any;
+    const planResult = await db.query("SELECT * FROM packages WHERE id = $1", [user.subscription_plan_id]);
+    const plan = planResult.rows[0];
 
     res.json({
       success: true,
@@ -109,7 +113,8 @@ router.post("/login", authRateLimiter, async (req, res) => {
   }
 
   try {
-    const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+    const userResult = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+    const user = userResult.rows[0];
 
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -128,19 +133,20 @@ router.post("/login", authRateLimiter, async (req, res) => {
     const token = generateToken(user.id, user.email);
 
     // Get subscription plan details
-    const plan = db.prepare("SELECT * FROM packages WHERE id = ?").get(user.subscription_plan_id) as any;
+    const planResult = await db.query("SELECT * FROM packages WHERE id = $1", [user.subscription_plan_id]);
+    const plan = planResult.rows[0];
 
     // Log the login action
-    db.prepare("INSERT INTO audit_logs (action, target_user_id, details) VALUES (?, ?, ?)").run(
+    await db.query("INSERT INTO audit_logs (action, target_user_id, details) VALUES ($1, $2, $3)", [
       "user_login",
       user.id,
       `User logged in from IP: ${req.ip}`
-    );
+    ]);
 
     // Count API keys and shopify stores
-    const apiKeyCount = db.prepare("SELECT COUNT(*) as count FROM api_keys WHERE user_id = ?").get(user.id) as any;
-    const shopifyStoresCount = db.prepare("SELECT COUNT(*) as count FROM shopify_stores WHERE user_id = ?").get(user.id) as any;
-    const messagesSent = db.prepare("SELECT COUNT(*) as count FROM message_logs WHERE user_id = ?").get(user.id) as any;
+    const apiKeyCountResult = await db.query("SELECT COUNT(*) as count FROM api_keys WHERE user_id = $1", [user.id]);
+    const shopifyStoresCountResult = await db.query("SELECT COUNT(*) as count FROM shopify_stores WHERE user_id = $1", [user.id]);
+    const messagesSentResult = await db.query("SELECT COUNT(*) as count FROM usage_logs WHERE messages_sent > 0 AND user_id = $1", [user.id]);
 
     res.json({
       user: {
@@ -152,9 +158,9 @@ router.post("/login", authRateLimiter, async (req, res) => {
         subscription_status: user.billing_status || 'active',
         trial_ends_at: user.trial_ends_at,
         is_admin: user.is_admin === 1,
-        api_key_count: apiKeyCount?.count || 0,
-        shopify_stores_count: shopifyStoresCount?.count || 0,
-        messages_sent: messagesSent?.count || 0,
+        api_key_count: parseInt(apiKeyCountResult.rows[0].count) || 0,
+        shopify_stores_count: parseInt(shopifyStoresCountResult.rows[0].count) || 0,
+        messages_sent: parseInt(messagesSentResult.rows[0].count) || 0,
         created_at: user.created_at,
       },
       token,
@@ -166,7 +172,7 @@ router.post("/login", authRateLimiter, async (req, res) => {
 });
 
 // Request Password Reset
-router.post("/forgot-password", authRateLimiter, (req, res) => {
+router.post("/forgot-password", authRateLimiter, async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
@@ -174,14 +180,15 @@ router.post("/forgot-password", authRateLimiter, (req, res) => {
   }
 
   try {
-    const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+    const userResult = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+    const user = userResult.rows[0];
 
     // Always return success for security (don't reveal if email exists)
     if (user) {
       const resetToken = generateResetToken();
       const tokenExpiry = getTokenExpiry(60); // 60 minutes
 
-      db.prepare("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?").run(resetToken, tokenExpiry, user.id);
+      await db.query("UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3", [resetToken, tokenExpiry, user.id]);
 
       // TODO: Send email with reset link
       // This should include: https://yourapp.com/reset-password?token={resetToken}
@@ -210,7 +217,8 @@ router.post("/reset-password", authRateLimiter, async (req, res) => {
   }
 
   try {
-    const user = db.prepare("SELECT * FROM users WHERE reset_token = ?").get(token) as any;
+    const userResult = await db.query("SELECT * FROM users WHERE reset_token = $1", [token]);
+    const user = userResult.rows[0];
 
     if (!user) {
       return res.status(400).json({ error: "Invalid or expired reset token" });
@@ -224,17 +232,17 @@ router.post("/reset-password", authRateLimiter, async (req, res) => {
 
     const hashedPassword = await hashPassword(newPassword);
 
-    db.prepare("UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?").run(
+    await db.query("UPDATE users SET password = $1, reset_token = NULL, reset_token_expiry = NULL WHERE id = $2", [
       hashedPassword,
       user.id
-    );
+    ]);
 
     // Log the password reset
-    db.prepare("INSERT INTO audit_logs (action, target_user_id, details) VALUES (?, ?, ?)").run(
+    await db.query("INSERT INTO audit_logs (action, target_user_id, details) VALUES ($1, $2, $3)", [
       "password_reset",
       user.id,
       "User reset their password"
-    );
+    ]);
 
     res.json({
       success: true,
@@ -247,21 +255,23 @@ router.post("/reset-password", authRateLimiter, async (req, res) => {
 });
 
 // Get Current User (requires auth)
-router.get("/me", authMiddleware, (req, res) => {
+router.get("/me", authMiddleware, async (req, res) => {
   try {
-    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId) as any;
+    const userResult = await db.query("SELECT * FROM users WHERE id = $1", [req.userId]);
+    const user = userResult.rows[0];
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
     // Get subscription plan details
-    const plan = db.prepare("SELECT * FROM packages WHERE id = ?").get(user.subscription_plan_id) as any;
+    const planResult = await db.query("SELECT * FROM packages WHERE id = $1", [user.subscription_plan_id]);
+    const plan = planResult.rows[0];
 
     // Count API keys and shopify stores
-    const apiKeyCount = db.prepare("SELECT COUNT(*) as count FROM api_keys WHERE user_id = ?").get(user.id) as any;
-    const shopifyStoresCount = db.prepare("SELECT COUNT(*) as count FROM shopify_stores WHERE user_id = ?").get(user.id) as any;
-    const messagesSent = db.prepare("SELECT COUNT(*) as count FROM message_logs WHERE user_id = ?").get(user.id) as any;
+    const apiKeyCountResult = await db.query("SELECT COUNT(*) as count FROM api_keys WHERE user_id = $1", [user.id]);
+    const shopifyStoresCountResult = await db.query("SELECT COUNT(*) as count FROM shopify_stores WHERE user_id = $1", [user.id]);
+    const messagesSentResult = await db.query("SELECT COUNT(*) as count FROM usage_logs WHERE messages_sent > 0 AND user_id = $1", [user.id]);
 
     res.json({
       id: user.id,
@@ -272,9 +282,9 @@ router.get("/me", authMiddleware, (req, res) => {
       subscription_status: user.billing_status || 'active',
       trial_ends_at: user.trial_ends_at,
       is_admin: user.is_admin === 1,
-      api_key_count: apiKeyCount?.count || 0,
-      shopify_stores_count: shopifyStoresCount?.count || 0,
-      messages_sent: messagesSent?.count || 0,
+      api_key_count: parseInt(apiKeyCountResult.rows[0].count) || 0,
+      shopify_stores_count: parseInt(shopifyStoresCountResult.rows[0].count) || 0,
+      messages_sent: parseInt(messagesSentResult.rows[0].count) || 0,
       created_at: user.created_at,
     });
   } catch (error) {

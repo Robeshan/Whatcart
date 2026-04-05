@@ -69,6 +69,7 @@ export const LoginPage = () => {
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#25D366] transition-colors" size={20} />
             <input 
               type="email" 
+              autoComplete="email"
               required
               disabled={isLoading}
               value={email}
@@ -87,6 +88,7 @@ export const LoginPage = () => {
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#25D366] transition-colors" size={20} />
             <input 
               type="password" 
+              autoComplete="current-password"
               required
               disabled={isLoading}
               value={password}
@@ -172,6 +174,7 @@ export const RegisterPage = () => {
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#25D366] transition-colors" size={20} />
                 <input 
                   type="email" 
+                  autoComplete="email"
                   required
                   disabled={isLoading}
                   value={formData.email}
@@ -202,6 +205,7 @@ export const RegisterPage = () => {
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#25D366] transition-colors" size={20} />
                 <input 
                   type="password" 
+                  autoComplete="new-password"
                   required
                   disabled={isLoading}
                   value={formData.password}
