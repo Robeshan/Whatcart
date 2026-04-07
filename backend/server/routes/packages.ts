@@ -3,30 +3,50 @@ import db from "../db.js";
 
 const router = Router();
 
-router.get("/", (req, res) => {
-  const packages = db.prepare("SELECT * FROM packages").all();
-  res.json(packages.map((p: any) => ({ ...p, features: JSON.parse(p.features) })));
+router.get("/", async (req, res) => {
+  try {
+    const pkgs = await db.query("SELECT * FROM packages");
+    res.json(pkgs.rows.map((p: any) => ({ ...p, features: JSON.parse(p.features) })));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch packages" });
+  }
 });
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   const { name, price, description, features, popular } = req.body;
-  const insert = db.prepare("INSERT INTO packages (name, price, description, features, popular) VALUES (?, ?, ?, ?, ?)");
-  const result = insert.run(name, price, description, JSON.stringify(features), popular ? 1 : 0);
-  res.json({ id: result.lastInsertRowid });
+  try {
+    const result = await db.query(
+      "INSERT INTO packages (name, price, description, features, popular) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+      [name, price, description, JSON.stringify(features), !!popular]
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create package" });
+  }
 });
 
-router.put("/:id", (req, res) => {
+router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { name, price, description, features, popular, active } = req.body;
-  const update = db.prepare("UPDATE packages SET name = ?, price = ?, description = ?, features = ?, popular = ?, active = ? WHERE id = ?");
-  update.run(name, price, description, JSON.stringify(features), popular ? 1 : 0, active ? 1 : 0, id);
-  res.json({ success: true });
+  try {
+    await db.query(
+      "UPDATE packages SET name = $1, price = $2, description = $3, features = $4, popular = $5, active = $6 WHERE id = $7",
+      [name, price, description, JSON.stringify(features), !!popular, !!active, id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update package" });
+  }
 });
 
-router.delete("/:id", (req, res) => {
+router.delete("/:id", async (req, res) => {
   const { id } = req.params;
-  db.prepare("DELETE FROM packages WHERE id = ?").run(id);
-  res.json({ success: true });
+  try {
+    await db.query("DELETE FROM packages WHERE id = $1", [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete package" });
+  }
 });
 
 export default router;

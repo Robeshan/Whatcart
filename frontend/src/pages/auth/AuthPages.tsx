@@ -9,7 +9,8 @@ import {
   CheckCircle2, 
   AlertCircle,
   Loader2,
-  ChevronLeft
+  ChevronLeft,
+  User 
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -35,7 +36,7 @@ const AuthLayout = ({ children, title, subtitle }: { children: React.ReactNode, 
 );
 
 export const LoginPage = () => {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -50,13 +51,13 @@ export const LoginPage = () => {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       });
       const data = await res.json();
       
       if (res.ok) {
         localStorage.setItem('user', JSON.stringify(data));
-        navigate('/');
+        window.location.href = '/'; // Refresh to load app state completely
       } else {
         setError(data.error);
       }
@@ -77,15 +78,15 @@ export const LoginPage = () => {
           </div>
         )}
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email Address</label>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email <span className="lowercase font-normal text-slate-400">or</span> Mobile Number</label>
           <div className="relative group">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#25D366] transition-colors" size={20} />
             <input 
-              type="email" 
+              type="text" 
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@company.com"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="name@company.com or +1234567890"
               className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-[#25D366] outline-none transition-all text-slate-800"
             />
           </div>
@@ -124,8 +125,8 @@ export const LoginPage = () => {
 
 export const RegisterPage = () => {
   const [step, setStep] = useState(1); // 1: Info, 2: Verification
-  const [formData, setFormData] = useState({ email: '', password: '', phone: '' });
-  const [code, setCode] = useState('');
+  const [formData, setFormData] = useState({ username: '', email: '', password: '', mobile_number: '' });
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -161,10 +162,10 @@ export const RegisterPage = () => {
     setError('');
     
     try {
-      const res = await fetch('/api/auth/verify', {
+      const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email, code }),
+        body: JSON.stringify({ email: formData.email, otp }),
       });
       const data = await res.json();
       
@@ -183,8 +184,8 @@ export const RegisterPage = () => {
 
   return (
     <AuthLayout 
-      title={step === 1 ? "Create Account" : "Verify Phone"} 
-      subtitle={step === 1 ? "Start recovering carts in minutes" : `We sent a 6-digit code to ${formData.phone}`}
+      title={step === 1 ? "Create Account" : "Verify Email"} 
+      subtitle={step === 1 ? "Start recovering carts in minutes" : `We sent a 6-digit code to ${formData.email}`}
     >
       <AnimatePresence mode="wait">
         {step === 1 ? (
@@ -194,7 +195,7 @@ export const RegisterPage = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             onSubmit={handleRegister} 
-            className="space-y-5"
+            className="space-y-4"
           >
             {error && (
               <div className="bg-red-50 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-medium border border-red-100">
@@ -202,6 +203,20 @@ export const RegisterPage = () => {
                 {error}
               </div>
             )}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Username</label>
+              <div className="relative group">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#25D366] transition-colors" size={20} />
+                <input 
+                  type="text" 
+                  required
+                  value={formData.username}
+                  onChange={(e) => setFormData({...formData, username: e.target.value})}
+                  placeholder="Your Name"
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-[#25D366] outline-none transition-all text-slate-800"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email Address</label>
               <div className="relative group">
@@ -217,14 +232,14 @@ export const RegisterPage = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Phone Number</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Mobile Number</label>
               <div className="relative group">
                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#25D366] transition-colors" size={20} />
                 <input 
                   type="tel" 
                   required
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  value={formData.mobile_number}
+                  onChange={(e) => setFormData({...formData, mobile_number: e.target.value})}
                   placeholder="+1 (555) 000-0000"
                   className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-[#25D366] outline-none transition-all text-slate-800"
                 />
@@ -247,11 +262,11 @@ export const RegisterPage = () => {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full py-4 bg-[#25D366] text-white rounded-2xl font-bold hover:bg-[#1eb954] transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-70"
+              className="w-full py-4 bg-[#25D366] text-white rounded-2xl font-bold hover:bg-[#1eb954] transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-70 mt-4"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : <>Create Account <ArrowRight size={20} /></>}
             </button>
-            <p className="text-center text-sm text-slate-500">
+            <p className="text-center text-sm text-slate-500 mt-4">
               Already have an account? <Link to="/login" name="login-link" className="text-[#25D366] font-bold hover:underline">Log in</Link>
             </p>
           </motion.form>
@@ -275,8 +290,8 @@ export const RegisterPage = () => {
                 type="text" 
                 maxLength={6}
                 required
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
                 placeholder="000000"
                 className="w-full text-center text-3xl font-black tracking-[0.5em] py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-[#25D366] outline-none transition-all text-slate-800"
               />

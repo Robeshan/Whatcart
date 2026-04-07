@@ -11,7 +11,8 @@ import {
   NavLink, 
   Link,
   useLocation,
-  useNavigate
+  useNavigate,
+  Navigate
 } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -155,7 +156,10 @@ const Sidebar = () => {
           <span>{isAdmin ? 'User Dashboard' : 'Admin Panel'}</span>
         </button>
         <button 
-          onClick={() => alert('Logging out...')}
+          onClick={() => {
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+          }}
           className="flex items-center gap-3 px-4 py-3 w-full text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
         >
           <LogOut size={20} />
@@ -1376,6 +1380,14 @@ bubble_fn_preview_ready(formatted);`;
 
 // --- Main App ---
 
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const user = localStorage.getItem('user');
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
+
 export default function App() {
   return (
     <Router>
@@ -1388,26 +1400,28 @@ export default function App() {
 
           {/* App Routes */}
           <Route path="/*" element={
-            <div className="flex min-h-screen bg-slate-50">
-              <Sidebar />
-              <main className="flex-1 overflow-y-auto h-screen">
-                <AnimatePresence mode="wait">
-                  <Routes>
-                    <Route path="/" element={<DashboardPage />} />
-                    <Route path="/connections" element={<ConnectionsPage />} />
-                    <Route path="/customization" element={<CustomizationPage />} />
-                    <Route path="/packages" element={<PackagesPage />} />
-                    <Route path="/help" element={<HelpPage />} />
-                    
-                    {/* Admin Routes */}
-                    <Route path="/admin" element={<AdminDashboardPage />} />
-                    <Route path="/admin/users" element={<AdminUsersPage />} />
-                    <Route path="/admin/packages" element={<AdminPackagesPage />} />
-                    <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
-                  </Routes>
-                </AnimatePresence>
-              </main>
-            </div>
+            <ProtectedRoute>
+              <div className="flex min-h-screen bg-slate-50">
+                <Sidebar />
+                <main className="flex-1 overflow-y-auto h-screen">
+                  <AnimatePresence mode="wait">
+                    <Routes>
+                      <Route path="/" element={<DashboardPage />} />
+                      <Route path="/connections" element={<ConnectionsPage />} />
+                      <Route path="/customization" element={<CustomizationPage />} />
+                      <Route path="/packages" element={<PackagesPage />} />
+                      <Route path="/help" element={<HelpPage />} />
+                      
+                      {/* Admin Routes */}
+                      <Route path="/admin" element={<AdminDashboardPage />} />
+                      <Route path="/admin/users" element={<AdminUsersPage />} />
+                      <Route path="/admin/packages" element={<AdminPackagesPage />} />
+                      <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
+                    </Routes>
+                  </AnimatePresence>
+                </main>
+              </div>
+            </ProtectedRoute>
           } />
         </Routes>
       </AnimatePresence>
